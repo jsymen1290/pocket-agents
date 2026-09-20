@@ -226,7 +226,7 @@ def changes(corp_code, since=None, to=None):
             "method": "kind from DART report-name prefixes; correction linked to the latest earlier filing with the same base name (heuristic); term diffs from OpenDART structured endpoints where the report type has one"}
 
 
-def asof(corp_code, date, lookback_days=365):
+def asof(corp_code, date, lookback_days=120):
     date = _ymd(date)
     frm = (datetime.datetime.strptime(date, "%Y%m%d") - datetime.timedelta(days=lookback_days)).strftime("%Y%m%d")
     fl = [f for f in filings(corp_code, frm, date)["filings"] if frm <= (f.get("rcept_dt") or "") <= date]  # defensive: never admit later receipts
@@ -352,7 +352,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if p == "/v1/changes":
             return self._run(lambda: changes(qd.get("corp_code"), qd.get("since"), qd.get("to")))
         if p == "/v1/asof":
-            return self._run(lambda: asof(qd.get("corp_code"), qd.get("date"), int(qd.get("lookback_days") or 365)))
+            return self._run(lambda: asof(qd.get("corp_code"), qd.get("date"), max(7, min(int(qd.get("lookback_days") or 120), 365))))
         return self._json(404, {"service": SERVICE_ID, "status": "NOT_FOUND"})
 
     def do_HEAD(self):
