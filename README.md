@@ -11,7 +11,7 @@ Six verification-style services for the [Pocket Network](https://pocket.network)
 | `dart-kr-events-v1` | https://dart.pokt-agent.com | What changed for a Korean listed company: filings normalised by kind, corrections linked to originals, field-by-field issuance term diffs, point-in-time view (supplier-side OpenDART key) |
 | `pine-script-lint-v1` | https://pine.pokt-agent.com | Does this Pine Script contain structures that make history look better than live? `/v1/integrity` (future data, unconfirmed HTF, past-drawn signals, realtime-only state, strategy assumptions) + `/v1/lint` (syntax, v4 remnants, limits) |
 
-The first four pass the portal audit 9/9 on Beta TestNet (2026-09-20) with settled claims served through the new `pocket-relay-miner`.
+All six pass the portal audit 9/9 on Beta TestNet (2026-09-20) with settled claims served through the new `pocket-relay-miner`.
 
 ## Layout
 
