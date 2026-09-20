@@ -248,7 +248,7 @@ def parse_question(q):
     if len(q) > 2000:
         raise ValueError("INVALID_QUESTION")
     date = re.search(r"\b(20\d{6})\b", q)
-    stock = re.search(r"\b(\d{6})\b", q) if not date else None
+    stock = next((m for m in re.finditer(r"(?<!\d)(\d{6})(?!\d)", q) if not date or m.start() != date.start()), None)
     name = None
     m = re.search(r"([가-힣A-Za-z0-9&·]+?)(?:의|에 대해|에 대한|\s+(?:공시|정정|filings?|changes?))", q)
     if m and len(m.group(1)) >= 2:
