@@ -1,0 +1,8 @@
+data/
+logs/
+.env
+*.keyring-pass
+*keys*.yaml
+*.hex
+__pycache__/
+*.pyc

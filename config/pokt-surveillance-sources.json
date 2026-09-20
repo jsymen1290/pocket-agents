@@ -1,0 +1,23 @@
+{
+  "schema": "llm-runtime-pokt-surveillance-sources/v1",
+  "note": "Official/public sources only (GET). Reused from 포켓네트워크/config/pokt-c-public-sources.json (reviewed 2026-09-15) plus GitHub release feeds and the Agentic Portal page. Telegram/X are not_configured here (no approved automated contract).",
+  "limits": {"timeout_seconds": 20, "response_bytes": 8388608, "total_bytes": 50331648, "requests": 30},
+  "sources": [
+    {"id": "roadmap", "url": "https://pocket.network/roadmap/", "kind": "html", "class": "OFFICIAL_WEB", "tracks": ["A", "B", "C", "D"], "purpose": "plans; not implementation evidence"},
+    {"id": "agent-portal", "url": "https://agent.pocket.network/", "kind": "html", "class": "OFFICIAL_WEB", "tracks": ["D"], "purpose": "Agentic Portal launch/status text"},
+    {"id": "docs-home", "url": "https://docs.pocket.network/", "kind": "html", "class": "OFFICIAL_DOCS", "tracks": ["A", "B", "C", "D"], "purpose": "docs index changes"},
+    {"id": "docs-supplier-staking", "url": "https://docs.pocket.network/node-operators/supplier-staking/", "kind": "html", "class": "OFFICIAL_DOCS", "tracks": ["B", "C"], "purpose": "stake rules"},
+    {"id": "docs-service-register", "url": "https://docs.pocket.network/services/register/", "kind": "html", "class": "OFFICIAL_DOCS", "tracks": ["D"], "purpose": "service registration rules"},
+    {"id": "docs-delegation", "url": "https://docs.pocket.network/validators/delegation/", "kind": "html", "class": "OFFICIAL_DOCS", "tracks": ["A"], "purpose": "delegation rules"},
+    {"id": "gh-poktroll-release", "url": "https://api.github.com/repos/pokt-network/poktroll/releases/latest", "kind": "json", "class": "OFFICIAL_GITHUB", "tracks": ["A", "B", "C", "D"], "purpose": "protocol release tag/notes", "json_keys": ["tag_name", "name", "published_at"]},
+    {"id": "gh-relayminer-commits", "url": "https://api.github.com/repos/pokt-network/pocket-relay-miner/commits?per_page=5", "kind": "json", "class": "OFFICIAL_GITHUB", "tracks": ["C"], "purpose": "RelayMiner activity", "json_keys": ["sha", "commit.message"]},
+    {"id": "analytics-network", "url": "https://analytics.pocket.network/api/network?range=60d", "kind": "json", "class": "EXPLORER_ANALYTICS", "tracks": ["A", "B", "C"], "purpose": "network participants (numbers change daily; only schema/field-set changes are flagged)", "json_keys": ["stats"], "volatile": true},
+    {"id": "analytics-suppliers", "url": "https://analytics.pocket.network/api/suppliers?range=60d", "kind": "json", "class": "EXPLORER_ANALYTICS", "tracks": ["B", "C"], "purpose": "supplier activity", "json_keys": ["stats"], "volatile": true},
+    {"id": "analytics-services-list", "url": "https://analytics.pocket.network/api/services/list", "kind": "json", "class": "EXPLORER_ANALYTICS", "tracks": ["D"], "purpose": "service catalog; a new listing is a competitor/peer signal", "json_keys": ["services"]},
+    {"id": "explorer-services", "url": "https://explorer.pocket.network/services", "kind": "html", "class": "EXPLORER", "tracks": ["D"], "purpose": "public service page receipt"},
+    {"id": "forum-latest", "url": "https://forum.pokt.network/latest.rss", "kind": "html", "class": "OFFICIAL_FORUM", "tracks": ["A", "B", "C", "D"], "purpose": "governance/forum topics (RSS titles); proposals are not decisions until passed"},
+    {"id": "blog-feed", "url": "https://pocket.network/feed/", "kind": "html", "class": "OFFICIAL_WEB", "tracks": ["A", "B", "C", "D"], "purpose": "official blog posts (RSS)"},
+    {"id": "gh-docs-commits", "url": "https://api.github.com/repos/pokt-network/docs-v2/commits?per_page=5", "kind": "json", "class": "OFFICIAL_GITHUB", "tracks": ["A", "B", "C", "D"], "purpose": "docs changes", "json_keys": ["sha", "commit.message"]}
+  ],
+  "not_configured": ["Telegram poktkoreaofficial/poktpool (public feed unavailable; UI capture only)", "Official X (no API contract)", "forum.pokt.network (no reviewed contract)"]
+}

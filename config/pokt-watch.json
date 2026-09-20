@@ -1,0 +1,39 @@
+{
+  "schema": "llm-runtime-pokt-watch/v1",
+  "note": "Public addresses only. User-owned addresses go in data/pokt/watch.local.json (gitignored) or POKT_OWNER_ADDRESS / POKT_OPERATOR_ADDRESSES in .env; they are merged at run time.",
+  "suppliers": [
+    {
+      "operator_address": "pokt1cr5suvepkkqp22qhz4g6pkt7rwdqspm9rhn0d9",
+      "label": "PUBLIC_SAMPLE_xrpc.cl",
+      "role": "PUBLIC_SAMPLE_NOT_USER_WALLET",
+      "track": "C_REFERENCE",
+      "source": "C track fixed sample (docs/pokt-c-autocollect.md); kept as a live reference of what a 100k-stake multi-service supplier settles"
+    }
+  ],
+  "validator_candidates": [
+    {"moniker": "Blockval", "operator_address": "poktvaloper1mfldwthxautk8sfe8hrkmsgh8fjetjd6tju39a", "source": "A_5M_INCOME_MODEL candidate"},
+    {"moniker": "Stakenodes", "operator_address": null, "source": "B operator candidate; validator moniker match"},
+    {"moniker": "Kleomedes α", "operator_address": null, "source": "D prospect; validator moniker match"},
+    {"moniker": "PNF-04", "operator_address": null, "source": "Nodefleet (D prospect) validator"},
+    {"moniker": "polkachu.com", "operator_address": null, "source": "large low-commission validator for comparison"}
+  ],
+  "user": {
+    "owner_address": null,
+    "operator_addresses": [],
+    "note": "Set after the self-custody wallet exists. Owner = the pokt1 address that holds funds and receives rewards; operators = supplier operator addresses run by you (C) or by a contracted node runner with your stake (B)."
+  },
+  "scan": {
+    "initial_lookback_blocks": 240,
+    "max_blocks_per_cycle": 3000,
+    "max_settlement_blocks_per_cycle": 6,
+    "max_pages": 3,
+    "max_suppliers": 6
+  },
+  "alerts": {
+    "settlement_silence_hours": 24,
+    "state_stale_hours": 3
+  },
+  "market": {
+    "pokt_monitor_latest": "~/.local/share/pokt-monitor/data/pokt-monitor/latest.json"
+  }
+}

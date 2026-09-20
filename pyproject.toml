@@ -1,0 +1,7 @@
+[project]
+name = "pocket-agents"
+version = "0.1.0"
+description = "Verification-style services for the Pocket Network Agentic Portal"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+dependencies = []
