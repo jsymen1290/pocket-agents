@@ -669,3 +669,101 @@ class GptReframeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             K.executable("BTC", -1)
         self.assertLess(len(json.dumps(K.service_card(), ensure_ascii=False).encode()), 4096)
+
+
+class KrExportTests(unittest.TestCase):
+    """P34-P35: KR Export Pulse over fixture XML (no network)."""
+    XML = ('<?xml version="1.0"?><response><header><resultCode>00</resultCode><resultMsg>ok</resultMsg></header><body><items>%s</items><totalCount>%d</totalCount></body></response>')
+    def _item(self, mon, dt, vals):
+        return "<item>" + "".join("<itemUsdAmt%02d>%s</itemUsdAmt%02d>" % (i, "{:,}".format(v), i) for i, v in enumerate(vals)) + "<priodDt>%s</priodDt><priodMon>%s</priodMon><priodYear>%s</priodYear></item>" % (dt, mon, mon[:4])
+    def setUp(self):
+        from pocket_agents import krexport as K
+        self.K = K; K._cache.clear(); self.tmp = tempfile.mkdtemp()
+        os.environ["DATA_GO_KR_SERVICE_KEY"] = "testkey"
+        base = [100] + [10] * 10
+        items = [self._item("202607", "01~10", base), self._item("202607", "01~20", [220] + [22] * 10), self._item("202607", "01~31", [330] + [33] * 10),
+                 self._item("202608", "01~10", [130] + [16] + [10] * 9)]
+        self.calls = []
+        def fake(url):
+            self.calls.append(url)
+            if "prlstMmUtPrviExpAcrs" in url:
+                return self.XML % ("".join(items), len(items))
+            if "nitemtrade" in url:
+                return self.XML % ('<item><balPayments>5</balPayments><expDlr>7</expDlr><expWgt>1</expWgt><hsCd>-</hsCd><impDlr>2</impDlr><impWgt>1</impWgt><statCd>-</statCd><statCdCntnKor1>-</statCdCntnKor1><statKor>-</statKor><year>총계</year></item>'
+                                   '<item><balPayments>5</balPayments><expDlr>7</expDlr><expWgt>1</expWgt><hsCd>854231</hsCd><impDlr>2</impDlr><impWgt>1</impWgt><statCd>US</statCd><statCdCntnKor1>미국</statCdCntnKor1><statKor>프로세서</statKor><year>2026.07</year></item>', 2)
+            raise AssertionError(url)
+        self.orig = K.fetch_xml; K.fetch_xml = fake
+    def tearDown(self):
+        self.K.fetch_xml = self.orig; self.K._cache.clear(); os.environ.pop("DATA_GO_KR_SERVICE_KEY", None); shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_P34_tenday_increments_and_revision_log(self):
+        t = self.K.tenday("202607", "202608", self.tmp)
+        self.assertEqual([r["stage"] for r in t["rows"]], ["d1_10", "d1_20", "month", "d1_10"]); self.assertEqual(t["unit"], "USD thousand")
+        inc = next(i for i in t["increments"] if i["period"] == "202607")
+        self.assertEqual([s["days"] for s in inc["segments"]], ["01~10", "11~20", "21~31"])
+        self.assertEqual(inc["segments"][1]["amounts"]["semiconductors"], 12); self.assertTrue(inc["segments"][1]["derived"])
+        self.assertEqual(t["revisions_observed_this_fetch"], [])
+        self.assertEqual(self.K.revisions(self.tmp)["count"], 0)
+        self.assertNotIn("error", json.dumps(t)[:2048].lower())
+        os.environ.pop("DATA_GO_KR_SERVICE_KEY", None); self.K._cache.clear()
+        with self.assertRaises(self.K.KeyMissing):
+            self.K.tenday("202607", "202608", self.tmp)
+
+    def test_P35_pulse_contributions_hs_and_questions(self):
+        p = self.K.pulse(3, self.tmp)
+        self.assertEqual(p["latest"]["stage"], "d1_10"); c = p["comparisons"]["vs_prior_month_same_stage"]
+        self.assertEqual((c["reference_period"], c["total_change"]), ("202607", 30)); self.assertEqual(c["contributions"][0]["item"], "semiconductors"); self.assertEqual(c["contributions"][0]["share_of_total_change_pct"], 20.0)
+        self.assertIsNone(p["comparisons"]["vs_prior_year_same_stage"])
+        h = self.K.hs("8542", "202607", "202607", country="us"); self.assertEqual(h["count"], 1); self.assertEqual(h["totals_all_countries"]["export_usd"], 7)
+        P = self.K.parse_question
+        self.assertEqual(P("반도체 수출 지난달 대비 얼마나 변했어?")["intent"], "PULSE"); self.assertEqual(P("HS 8542 by country")["hs"], "8542")
+        self.assertEqual(P("was July revised?")["intent"], "REVISIONS"); self.assertEqual(P("which items do you cover")["intent"], "ITEMS"); self.assertEqual(P("hi")["intent"], "UNKNOWN")
+        a = self.K.answer({"question": "hs by country"}, self.tmp); self.assertEqual(a["status"], "NEEDS_CLARIFICATION")
+        self.assertLess(len(json.dumps(self.K.service_card(), ensure_ascii=False).encode()), 4096)
+
+
+class DartEventsTests(unittest.TestCase):
+    """P36-P37: DART KR Events over fake OpenDART responses (no network)."""
+    def setUp(self):
+        from pocket_agents import dartevents as D
+        self.D = D; D._cache.clear(); self.tmp = tempfile.mkdtemp()
+        os.environ["OPENDART_API_KEY"] = "k"
+        os.makedirs(os.path.join(self.tmp, "dart"))
+        open(os.path.join(self.tmp, "dart", "corpCode.xml"), "w", encoding="utf-8").write('<result><list><corp_code>00126380</corp_code><corp_name>삼성전자</corp_name><stock_code>005930</stock_code><modify_date>20260101</modify_date></list><list><corp_code>00000001</corp_code><corp_name>삼성전자서비스</corp_name><stock_code></stock_code><modify_date>20260101</modify_date></list></result>')
+        L = [{"corp_code": "00126380", "corp_name": "삼성전자", "stock_code": "005930", "corp_cls": "Y", "report_nm": "유상증자결정", "rcept_no": "20260901000001", "flr_nm": "삼성전자", "rcept_dt": "20260901", "rm": "유"},
+             {"corp_code": "00126380", "corp_name": "삼성전자", "stock_code": "005930", "corp_cls": "Y", "report_nm": "[기재정정]유상증자결정", "rcept_no": "20260910000002", "flr_nm": "삼성전자", "rcept_dt": "20260910", "rm": "유"},
+             {"corp_code": "00126380", "corp_name": "삼성전자", "stock_code": "005930", "corp_cls": "Y", "report_nm": "[철회]임시주주총회소집", "rcept_no": "20260912000003", "flr_nm": "삼성전자", "rcept_dt": "20260912", "rm": ""},
+             {"corp_code": "00126380", "corp_name": "삼성전자", "stock_code": "005930", "corp_cls": "Y", "report_nm": "임시주주총회소집", "rcept_no": "20260905000004", "flr_nm": "삼성전자", "rcept_dt": "20260905", "rm": ""}]
+        def fake(url):
+            if "/list.json" in url:
+                return json.dumps({"status": "000", "total_page": 1, "list": L}).encode()
+            if "/piicDecsn.json" in url:
+                return json.dumps({"status": "000", "list": [{"rcept_no": "20260901000001", "corp_code": "00126380", "corp_name": "삼성전자", "corp_cls": "Y", "nstk_ostk_cnt": "1000", "fdpp_fclt": "100", "ic_mthn": "주주배정"},
+                                                            {"rcept_no": "20260910000002", "corp_code": "00126380", "corp_name": "삼성전자", "corp_cls": "Y", "nstk_ostk_cnt": "1200", "fdpp_fclt": "100", "ic_mthn": "주주배정"}]}).encode()
+            raise AssertionError(url)
+        self.orig = D.fetch; D.fetch = fake
+    def tearDown(self):
+        self.D.fetch = self.orig; self.D._cache.clear(); os.environ.pop("OPENDART_API_KEY", None); shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_P36_classify_link_diff_asof(self):
+        D = self.D
+        self.assertEqual(D._classify("[기재정정]유상증자결정   "), ("CORRECTION", "유상증자결정")); self.assertEqual(D._classify("[철회]X")[0], "WITHDRAWAL")
+        ch = D.changes("00126380", "20260901", "20260920")
+        kinds = {e["rcept_no"]: e for e in ch["events"]}
+        corr = kinds["20260910000002"]; self.assertEqual((corr["kind"], corr["correction_of"], corr["link_status"]), ("CORRECTION", "20260901000001", "LINKED_BY_NAME"))
+        self.assertEqual(corr["term_diff"]["changed_fields"], [{"field": "nstk_ostk_cnt", "before": "1000", "after": "1200"}]); self.assertEqual(corr["term_diff"]["unchanged_field_count"], 2)
+        self.assertEqual(kinds["20260912000003"]["correction_of"], "20260905000004"); self.assertFalse(ch["judgments"]["completion_confirmed"])
+        a = D.asof("00126380", "20260905"); self.assertEqual([f["rcept_no"] for f in a["effective_filings"]], ["20260901000001", "20260905000004"])
+        b = D.asof("00126380", "20260915"); self.assertEqual([f["rcept_no"] for f in b["effective_filings"]], ["20260910000002"]); self.assertEqual(b["withdrawn_count"], 1)
+
+    def test_P37_corp_lookup_questions_and_key_gate(self):
+        D = self.D
+        c = D.corp(self.tmp, name="삼성전자"); self.assertEqual(c["matches"][0]["corp_code"], "00126380"); self.assertEqual(D.corp(self.tmp, stock_code="005930")["count"], 1)
+        P = D.parse_question
+        self.assertEqual(P("삼성전자 정정공시 뭐가 바뀌었어?"), {"intent": "CHANGES", "name": "삼성전자", "stock_code": None, "date": None})
+        self.assertEqual(P("what did 005930 look like as of 20260905")["intent"], "ASOF"); self.assertEqual(P("삼성전자의 공시 목록")["intent"], "FILINGS")
+        a = D.answer({"question": "삼성전자 정정공시 뭐가 바뀌었어?", "since": "20260901"}, self.tmp); self.assertEqual((a["intent"], a["corp"]["corp_code"], a["data"]["schema"]), ("CHANGES", "00126380", "dart-changes/v1"))
+        os.environ.pop("OPENDART_API_KEY", None); D._cache.clear()
+        with self.assertRaises(D.KeyMissing):
+            D.filings("00126380", "20260901", "20260920")
+        self.assertLess(len(json.dumps(D.service_card(), ensure_ascii=False).encode()), 4096)
