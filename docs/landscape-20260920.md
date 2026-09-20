@@ -52,7 +52,7 @@ GPT의 개발기간 추정 미채택, 500만 POKT 배분 변경 없음, 지속�
 ## 5. 다음 행동
 1. 사용자: data.go.kr·OpenDART 키 발급 → Mac `.env`에 `DATA_GO_KR_SERVICE_KEY`, `OPENDART_API_KEY` → ②·③ 구현.
 2. 지속조사: 매주 이 문서 기준으로 등록 목록·감사·경쟁자 상태 diff만 기록(의미 있는 변경 없으면 커밋 안 함). 자동화는 별도 승인.
-3. GitHub `Jayanng/PocketAgent`에는 이 문서가 없다(GPT 확인). 공개 push 여부는 사용자 결정.
+3. 공개 저장소: https://github.com/jsymen1290/pocket-agents (2026-09-20 생성). GPT가 언급한 `Jayanng/PocketAgent`는 제3자(Johnson Jayanng)의 무관한 프로젝트로 확인됨.
 
 ## 6. 미확인
 - 포털 순위 산식, PNF 수락 manifest, pocket-data-mcp 재정비 여부, 업비트·빗썸 데이터의 유료 제공 권리, 관세청·DART API의 실제 호출 조건.
