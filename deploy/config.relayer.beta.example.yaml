@@ -1,0 +1,56 @@
+# Beta testnet relayer (new pocket-relay-miner). Public: https://beta.pokt-agent.com -> :8546 via cloudflared.
+listen_addr: "127.0.0.1:8546"
+redis:
+  url: "redis://127.0.0.1:6379"
+pocket_node:
+  query_node_rpc_url: "https://sauron-rpc.beta.infra.pocket.network"
+  query_node_grpc_url: "sauron-grpc.beta.infra.pocket.network:443"
+  grpc_insecure: false
+keys:
+  keys_file: "/path/to/keys/supplier-keys.yaml"
+services:
+  pokt-settlement-agent-v1:
+    validation_mode: eager
+    timeout_profile: fast
+    max_body_size_bytes: 10485760
+    default_backend: rest
+    backends:
+      rest:
+        url: "http://127.0.0.1:8793"
+  pokt-network-watch-v1:
+    validation_mode: eager
+    timeout_profile: fast
+    max_body_size_bytes: 10485760
+    default_backend: rest
+    backends:
+      rest:
+        url: "http://127.0.0.1:8794"
+  kr-market-data-v1:
+    validation_mode: eager
+    timeout_profile: fast
+    max_body_size_bytes: 10485760
+    default_backend: rest
+    backends:
+      rest:
+        url: "http://127.0.0.1:8795"
+  pine-script-lint-v1:
+    validation_mode: eager
+    timeout_profile: fast
+    max_body_size_bytes: 10485760
+    default_backend: rest
+    backends:
+      rest:
+        url: "http://127.0.0.1:8796"
+metrics:
+  enabled: true
+  addr: "127.0.0.1:9093"
+pprof:
+  enabled: false
+  addr: "127.0.0.1:6061"
+health_check:
+  enabled: true
+  addr: "127.0.0.1:8083"
+logging:
+  level: "info"
+  format: "text"
+  output: "stdout"

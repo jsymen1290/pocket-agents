@@ -1,0 +1,22 @@
+# Beta testnet miner (claims/proofs). chain_id must match beta.
+redis:
+  url: "redis://127.0.0.1:6379"
+pocket_node:
+  query_node_rpc_url: "https://sauron-rpc.beta.infra.pocket.network"
+  query_node_grpc_url: "sauron-grpc.beta.infra.pocket.network:443"
+  chain_id: "pocket-lego-testnet"
+  grpc_insecure: false
+  query_timeout_seconds: 10
+keys:
+  keys_file: "/path/to/keys/supplier-keys.yaml"
+block_time_seconds: 30
+metrics:
+  enabled: true
+  addr: "127.0.0.1:9094"
+pprof:
+  enabled: false
+  addr: "127.0.0.1:6062"
+logging:
+  level: "info"
+  format: "text"
+  output: "stdout"
