@@ -1,15 +1,17 @@
 # pocket-agents
 
-Four verification-style services for the [Pocket Network](https://pocket.network) Agentic Portal, built and operated by one supplier on a Mac mini. Stdlib-only Python (3.9+), no keys, every response a JSON object, deterministic per snapshot, facts separated from judgments.
+Six verification-style services for the [Pocket Network](https://pocket.network) Agentic Portal, built and operated by one supplier on a Mac mini. Stdlib-only Python (3.9+), no keys, every response a JSON object, deterministic per snapshot, facts separated from judgments.
 
 | Service id (beta + main) | Public docs | What it answers |
 |---|---|---|
 | `pokt-settlement-agent-v1` | https://pokt-agent.com | What was this supplier actually paid, with per-event evidence; supplier/network economics (observed, no forecasts); **operator watch** (`/v1/supplier/{op}/ops`): settlement gap class, on-chain config changes, fee balance, pending claims/proofs, check-first list |
 | `pokt-network-watch-v1` | https://watch.pokt-agent.com | What changed on Pocket Network: chain params, active alerts, change events over 15 official sources, each bound to a fetch receipt + SHA-256 that can be re-verified |
 | `kr-market-data-v1` | https://kr.pokt-agent.com | Are two Korean-exchange prices comparable? Upbit/Bithumb KRW tickers with data lag, orderbook-walked executable price (coverage, slippage, fee), kimchi premium vs Binance USDT, USD/KRW |
+| `kr-export-pulse-v1` | https://export.pokt-agent.com | What changed in Korea's exports (10 major items, 10-day provisional), which items drove it, and was it revised: same-fetch increments, same-stage comparisons, HS-by-country, revision log (supplier-side data.go.kr key) |
+| `dart-kr-events-v1` | https://dart.pokt-agent.com | What changed for a Korean listed company: filings normalised by kind, corrections linked to originals, field-by-field issuance term diffs, point-in-time view (supplier-side OpenDART key) |
 | `pine-script-lint-v1` | https://pine.pokt-agent.com | Does this Pine Script contain structures that make history look better than live? `/v1/integrity` (future data, unconfirmed HTF, past-drawn signals, realtime-only state, strategy assumptions) + `/v1/lint` (syntax, v4 remnants, limits) |
 
-All four pass the portal audit 9/9 on Beta TestNet (2026-09-20) with settled claims served through the new `pocket-relay-miner`.
+The first four pass the portal audit 9/9 on Beta TestNet (2026-09-20) with settled claims served through the new `pocket-relay-miner`.
 
 ## Layout
 
@@ -26,6 +28,8 @@ pocket_agents/
   watch.py         pokt-network-watch-v1 (:8794)
   krmarket.py      kr-market-data-v1 (:8795)
   pinelint.py      pine-script-lint-v1 (:8796)
+  krexport.py      kr-export-pulse-v1 (:8797)  needs DATA_GO_KR_SERVICE_KEY
+  dartevents.py    dart-kr-events-v1 (:8798)   needs OPENDART_API_KEY
   cli.py           entry points: *-serve, *-card, collect, surveil, ask
 tests/test_services.py   offline tests with fixtures (no network)
 deploy/            watch list, surveillance sources, RelayMiner/launchd templates (no secrets)
