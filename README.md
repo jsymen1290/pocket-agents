@@ -18,6 +18,7 @@ All six pass the portal audit 9/9 on Beta TestNet (2026-09-20) with settled clai
 ```
 pocket_agents/
   client.py        GET-only allow-listed HTTP client for public Pocket REST/RPC (budgeted)
+  indexer.py       data.pocket.network GraphQL: every settlement for an operator and range, complete coverage
   chain.py         LCD/RPC queries: params, supplier, service, balance, block_search/results
   settlement.py    EventClaimSettled extraction + aggregation
   collect.py       always-on collector (STATE/ALERTS/settlements ndjson) that the agents read

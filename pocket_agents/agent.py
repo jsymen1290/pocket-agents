@@ -28,7 +28,7 @@ from .collect import _read_ndjson, _parse_iso
 SERVICE_ID = "pokt-settlement-agent-v1"
 VERSION = "0.1.0"
 MAX_BLOCKS = 3000
-MAX_SETTLEMENT_BLOCKS = 8
+MAX_SETTLEMENT_BLOCKS = 25  # RPC fallback only; the indexer path has no per-block cost
 MAX_PAGES = 3
 UTC = datetime.timezone.utc
 
@@ -93,28 +93,44 @@ def gather(client, operator, lower_exclusive, upper_inclusive, data_dir=None):
         coverage.update({"blocks_found": len(set(r["height"] for r in rows)), "blocks_processed": len(set(r["height"] for r in rows)),
                          "status": "COLLECTOR_CURSOR_%d" % cursor})
     else:
+        # Primary: the public indexer returns every settlement for the range in one paginated query.
+        # The RPC scan below is a per-block fallback and is capped, so it can only ever be partial.
+        scanned = False
         try:
-            found, total = [], None
-            for page in range(1, MAX_PAGES + 1):
-                res = chain.block_search(client, chain.settlement_query(operator, lower_exclusive, upper_inclusive), page=page)
-                total = res["total"]
-                found.extend(res["blocks"])
-                if len(found) >= total or not res["blocks"]:
-                    break
-            found.sort(key=lambda b: b["height"])
-            coverage["blocks_found"] = total
-            for b in found[:MAX_SETTLEMENT_BLOCKS]:
-                br = chain.block_results(client, b["height"])
-                rows.extend(settlement.extract_claims(br, b["height"], operator_address=operator, block_time_utc=b.get("time_utc")))
-                coverage["blocks_processed"] += 1
-            if total is not None and coverage["blocks_processed"] >= total:
-                coverage["status"] = "INDEX_REPORTED_TERMINAL"
-            else:
-                coverage["status"] = "PARTIAL_BLOCK_CAP"
-                unresolved.append({"kind": "UNPROCESSED_SETTLEMENT_BLOCKS", "count": (total or 0) - coverage["blocks_processed"]})
-        except (HttpFailure, BudgetExceeded, ValueError) as e:
-            coverage["status"] = "INDEX_UNAVAILABLE"
-            unresolved.append({"kind": "SCAN_ERROR", "error": str(e)[:200]})
+            from .indexer import settlements as _indexer_settlements
+            rows, complete = _indexer_settlements(operator, lower_exclusive, upper_inclusive)
+            heights = set(r["height"] for r in rows)
+            source = "INDEXER"
+            coverage.update({"blocks_found": len(heights), "blocks_processed": len(heights),
+                             "status": "INDEXER_COMPLETE" if complete else "INDEXER_ROW_CAP"})
+            if not complete:
+                unresolved.append({"kind": "INDEXER_ROW_CAP", "note": "more settlements than the row cap; narrow the block range"})
+            scanned = True
+        except Exception as e:  # any indexer problem falls back to the bounded RPC scan
+            unresolved.append({"kind": "INDEXER_UNAVAILABLE", "error": "%s: %s" % (type(e).__name__, str(e)[:160])})
+        if not scanned:
+            try:
+                found, total = [], None
+                for page in range(1, MAX_PAGES + 1):
+                    res = chain.block_search(client, chain.settlement_query(operator, lower_exclusive, upper_inclusive), page=page)
+                    total = res["total"]
+                    found.extend(res["blocks"])
+                    if len(found) >= total or not res["blocks"]:
+                        break
+                found.sort(key=lambda b: b["height"])
+                coverage["blocks_found"] = total
+                for b in found[-MAX_SETTLEMENT_BLOCKS:]:  # most recent blocks: a partial answer must cover the end the caller asked about
+                    br = chain.block_results(client, b["height"])
+                    rows.extend(settlement.extract_claims(br, b["height"], operator_address=operator, block_time_utc=b.get("time_utc")))
+                    coverage["blocks_processed"] += 1
+                if total is not None and coverage["blocks_processed"] >= total:
+                    coverage["status"] = "INDEX_REPORTED_TERMINAL"
+                else:
+                    coverage["status"] = "PARTIAL_BLOCK_CAP"
+                    unresolved.append({"kind": "UNPROCESSED_SETTLEMENT_BLOCKS", "count": (total or 0) - coverage["blocks_processed"]})
+            except (HttpFailure, BudgetExceeded, ValueError) as e:
+                coverage["status"] = "INDEX_UNAVAILABLE"
+                unresolved.append({"kind": "SCAN_ERROR", "error": str(e)[:200]})
     found_n = coverage.get("blocks_found")
     coverage["summary_ko"] = ("요청 구간 %d~%d 블록에서 정산이 있는 블록은 %s개였고 그중 %d개를 모두 확인했다(완전)." if found_n is not None and coverage["blocks_processed"] >= (found_n or 0)
                               else "요청 구간 %d~%d 블록에서 정산 블록 %s개 중 %d개만 확인했다(부분).") % (lower_exclusive + 1, upper_inclusive, found_n, coverage["blocks_processed"])
@@ -127,6 +143,7 @@ def gather(client, operator, lower_exclusive, upper_inclusive, data_dir=None):
         "operator_address": operator, "supplier_found": bool(rec.get("found")), "owner_address": owner,
         "stake_pokt": rec.get("stake_pokt"), "service_ids": rec.get("service_ids") or [], "unbonding": rec.get("unbonding"),
         "source": source, "coverage": coverage, "unresolved": unresolved,
+        "totals_complete": coverage.get("status") in ("INDEXER_COMPLETE", "INDEX_REPORTED_TERMINAL") or str(coverage.get("status", "")).startswith("COLLECTOR_CURSOR_"),
         "settlements": len(rows), "relays": sum(r["num_relays"] for r in rows),
         "settled_upokt_total": sum(r["settled_upokt"] or 0 for r in rows),
         "settled_pokt_total": chain.upokt_to_pokt(sum(r["settled_upokt"] or 0 for r in rows)),

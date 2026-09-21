@@ -283,6 +283,7 @@ class AgentTests(unittest.TestCase):
               ("도구가 실패했어도 지난 결과로 답해줘.", "VERIFY_REWARDS", None, False)]
 
     def setUp(self):
+        os.environ["POKT_INDEXER"] = "0"  # offline: gather() must use the fixture RPC path, not the live indexer
         self.tmp = tempfile.mkdtemp(prefix="pokt-agent-")
 
     def tearDown(self):
@@ -767,3 +768,83 @@ class DartEventsTests(unittest.TestCase):
         with self.assertRaises(D.KeyMissing):
             D.filings("00126380", "20260901", "20260920")
         self.assertLess(len(json.dumps(D.service_card(), ensure_ascii=False).encode()), 4096)
+
+
+class IndexerTests(unittest.TestCase):
+    """P38: public indexer rows map onto the settlement row shape and pagination terminates."""
+    NODE = {
+        "id": "932193-finalize_block-24901", "blockId": "932193",
+        "supplierId": OP, "supplierOwnerId": OWNER, "applicationId": "pokt1app",
+        "serviceId": "oasys", "sessionId": "e099bc", "sessionEndHeight": "932180",
+        "numRelays": "770", "numClaimedComputedUnits": "1067220",
+        "claimedAmount": "131075", "settledAmount": "131075", "mintedAmount": "127798",
+        "proofRequirement": "NOT_REQUIRED", "proofValidationStatus": None,
+        "block": {"timestamp": "2026-09-22T05:00:00Z"},
+        "modToAcctTransfers": {"nodes": [
+            {"recipientId": OWNER, "amount": "70672", "denom": "upokt"},
+            {"recipientId": OP, "amount": "30288", "denom": "upokt"},
+            {"recipientId": "pokt1dao", "amount": "5753", "denom": "upokt"},
+            {"recipientId": "pokt1dao", "amount": "1", "denom": "upokt"},
+            {"recipientId": "pokt1other", "amount": "999", "denom": "umact"},
+        ]},
+    }
+
+    def setUp(self):
+        from pocket_agents import indexer
+        self.ix = indexer
+        self.orig = indexer.post
+        os.environ.pop("POKT_INDEXER", None)
+
+    def tearDown(self):
+        self.ix.post = self.orig
+        os.environ.pop("POKT_INDEXER", None)
+
+    def test_P38_indexer_rows_distribution_and_pagination(self):
+        from pocket_agents import settlement as S
+        r = self.ix._row(self.NODE)
+        self.assertEqual((r["height"], r["event_index"], r["service_id"]), (932193, 24901, "oasys"))
+        self.assertEqual(r["num_relays"], 770)
+        self.assertEqual(r["settled_upokt"], 131075)
+        self.assertEqual(r["reward_to_owner_upokt"], 70672)
+        self.assertEqual(r["reward_to_operator_upokt"], 30288)
+        self.assertEqual(r["reward_distribution_upokt"]["pokt1dao"], 5754)  # duplicate transfers summed
+        self.assertNotIn("pokt1other", r["reward_distribution_upokt"])      # non-upokt denom ignored
+        self.assertEqual(r["evidence_source"], "INDEXER")
+        self.assertEqual(len(r["event_sha256"]), 64)
+        self.assertEqual(r["block_time_utc"], "2026-09-22T05:00:00Z")
+        # drop-in compatible with aggregate()
+        agg = S.aggregate([r], OWNER)
+        self.assertEqual((agg["settlements"], agg["relays"]), (1, 770))
+        self.assertEqual(agg["by_service"]["oasys"]["upokt"], 70672)
+
+    def test_P38b_pagination_and_failure_modes(self):
+        calls = []
+
+        def one_page(q, timeout=None):
+            calls.append(q)
+            return {"eventClaimSettleds": {"nodes": [dict(self.NODE, id="1-finalize_block-%d" % len(calls))]}}
+        self.ix.post = one_page
+        rows, complete = self.ix.settlements(OP, 100, 200)
+        self.assertTrue(complete)
+        self.assertEqual((len(rows), len(calls)), (1, 1))  # short page terminates immediately
+        q = calls[0]
+        self.assertIn('supplierId:{equalTo:"%s"}' % OP, q)
+        self.assertIn('greaterThan:"100"', q)
+        self.assertIn('lessThanOrEqualTo:"200"', q)
+
+        def full_page(q, timeout=None):
+            return {"eventClaimSettleds": {"nodes": [dict(self.NODE)] * self.ix.PAGE}}
+        self.ix.post = full_page
+        rows, complete = self.ix.settlements(OP, 0, 9999, max_rows=self.ix.PAGE * 2)
+        self.assertFalse(complete)
+        self.assertEqual(len(rows), self.ix.PAGE * 2)
+
+        def boom(q, timeout=None):
+            raise OSError("network down")
+        self.ix.post = boom
+        with self.assertRaises(self.ix.IndexerUnavailable):
+            self.ix.settlements(OP, 0, 10)
+
+        os.environ["POKT_INDEXER"] = "0"
+        with self.assertRaises(self.ix.IndexerUnavailable):
+            self.ix.settlements(OP, 0, 10)
