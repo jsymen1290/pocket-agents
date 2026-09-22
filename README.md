@@ -13,6 +13,44 @@ Six verification-style services for the [Pocket Network](https://pocket.network)
 
 All six pass the portal audit 9/9 on Beta TestNet (2026-09-20) with settled claims served through the new `pocket-relay-miner`.
 
+## Two calls, shown
+
+Both of these are live right now, no key and no account.
+
+**Does this Pine script make backtests look better than live trading?**
+
+```bash
+curl -s -X POST https://pine.pokt-agent.com/v1/integrity -H 'content-type: application/json'   -d '{"source":"//@version=6
+indicator(\"x\", overlay=true)
+d = request.security(syminfo.tickerid, \"D\", close, lookahead=barmerge.lookahead_on)
+plot(d)
+"}'
+```
+
+```json
+{"verdict": "FAIL", "counts": {"error": 1, "warning": 1, "info": 0},
+ "findings": [
+   {"code": "P007", "severity": "warning", "line": 3, "message": "request.security with lookahead_on repaints on historical bars"},
+   {"code": "P201", "severity": "error",   "line": 3, "message": "request.security(..., lookahead_on) without a [1]-style offset reads the future on historical bars"}]}
+```
+
+Add `close[1]` to that same call and the error disappears: the accepted confirmed-bar idiom is recognised, not punished.
+
+**What would 0.5 BTC actually cost on a Korean exchange right now?**
+
+```bash
+curl -s 'https://kr.pokt-agent.com/v1/executable/BTC?qty=0.5&side=buy&fee_pct=0.05'
+```
+
+```json
+{"venue": "upbit", "average_price_krw": 116381997.41, "coverage": 1.0,
+ "slippage_pct": 0.0009, "orderbook_lag_seconds": 1.865}
+```
+
+`coverage` is the fraction of the quantity the visible book can fill, `slippage_pct` is against best price, and `orderbook_lag_seconds` is how stale the book was when we read it. A venue that is down returns a status code, never a guess.
+
+Median response time measured from the host on 2026-09-22: 248-333 ms across the six services.
+
 ## Layout
 
 ```
