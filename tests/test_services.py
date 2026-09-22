@@ -11,6 +11,8 @@ from pocket_agents import chain, prepare, settlement
 from pocket_agents.client import BudgetExceeded, Client, HttpFailure
 from pocket_agents.collect import compute_alerts, merge_alerts, run_cycle
 
+os.environ.setdefault("POKT_INDEXER", "0")  # 모든 시험은 기본 오프라인. 실제 인덱서를 치는 시험은 스스로 켠다
+
 OP = "pokt1cr5suvepkkqp22qhz4g6pkt7rwdqspm9rhn0d9"
 OWNER = "pokt1zfeh0nnqcnp5t48ntyze9r6qlv5q35g7s2u7ch"
 VAL = "poktvaloper1mfldwthxautk8sfe8hrkmsgh8fjetjd6tju39a"
@@ -793,11 +795,11 @@ class IndexerTests(unittest.TestCase):
         from pocket_agents import indexer
         self.ix = indexer
         self.orig = indexer.post
-        os.environ.pop("POKT_INDEXER", None)
+        os.environ["POKT_INDEXER"] = "1"
 
     def tearDown(self):
         self.ix.post = self.orig
-        os.environ.pop("POKT_INDEXER", None)
+        os.environ["POKT_INDEXER"] = "0"
 
     def test_P38_indexer_rows_distribution_and_pagination(self):
         from pocket_agents import settlement as S
@@ -845,6 +847,131 @@ class IndexerTests(unittest.TestCase):
         with self.assertRaises(self.ix.IndexerUnavailable):
             self.ix.settlements(OP, 0, 10)
 
-        os.environ["POKT_INDEXER"] = "0"
+        os.environ["POKT_INDEXER"] = "0"  # 비활성 확인
         with self.assertRaises(self.ix.IndexerUnavailable):
             self.ix.settlements(OP, 0, 10)
+
+
+class BenchmarkTests(unittest.TestCase):
+    """P39-P40: Agent Service Benchmark over fake portal documents (no network)."""
+    CAT = {"site": "Agentic Portal", "registryVersion": "911f9f0e6ec844db", "count": 4,
+           "x402Discovery": "https://agent.pocket.network/.well-known/x402",
+           "services": [
+               {"serviceId": "literature-search", "displayName": "Academic Literature Search", "category": "research",
+                "description": "Scholarly works via OpenAlex.", "resourceUrl": "https://p/v1/literature-search",
+                "priceUsd": "0.005000", "serving": True, "firstParty": True, "protocols": ["rest"],
+                "methods": {"GET /v1/health": "read", "POST /v1/literature": "read"},
+                "inputSchema": {"type": "object"}, "outputSchema": {"type": "object"},
+                "example": {"capturedAt": "2026-09-21T23:47:58Z"},
+                "rails": [{"id": "base", "network": "eip155:8453"}], "page": "https://p/services/literature-search"},
+               {"serviceId": "kr-export-pulse-v1", "displayName": "KR Export Pulse", "category": "government",
+                "description": "Korea customs export change analysis.", "priceUsd": "0.005000", "serving": True,
+                "firstParty": False, "protocols": ["rest"], "methods": {"GET /v1/items": "read"},
+                "inputSchema": {}, "outputSchema": {"type": "object"},
+                "example": {"capturedAt": "2026-09-22T00:00:00Z"}, "rails": [{"id": "base", "network": "eip155:8453"}]},
+               {"serviceId": "federal-register", "displayName": "Federal Register", "category": "government",
+                "description": "US rulemaking.", "priceUsd": "0.002000", "serving": False, "firstParty": True,
+                "protocols": ["rest"], "methods": {}, "example": {}, "rails": []},
+               {"serviceId": "entity-registration", "displayName": "Entity Registration", "category": "government",
+                "description": "SAM.gov entity verification.", "priceUsd": "0.005000", "serving": True,
+                "firstParty": True, "protocols": ["rest"], "methods": {}, "example": {"capturedAt": "2026-08-01T00:00:00Z"}, "rails": []},
+           ]}
+    STATUS = {"overall": "serving", "checkedAt": "2026-09-22T01:25:22Z", "registryVersion": "911f9f0e6ec844db",
+              "services": {"total": 4, "serving": 4}}
+    AUDIT = {"audited_at": "2026-09-22T02:00:00Z", "services": [
+        {"id": "kr-export-pulse-v1", "verdict": "PASS", "rules": {"A1": "PASS", "A7": "PASS"}, "findings": []},
+        {"id": "federal-register", "verdict": "FAIL", "rules": {"A1": "PASS", "A4": "FAIL"},
+         "findings": [{"rule": "A4", "level": "FAIL", "message": "no active supplier"}]},
+        {"id": "entity-registration", "verdict": "WARN", "rules": {"A1": "PASS", "A8": "WARN"},
+         "findings": [{"rule": "A8", "level": "WARN", "message": "no specs"}]},
+    ]}
+
+    def setUp(self):
+        from pocket_agents import benchmark
+        self.B = benchmark
+        benchmark._cache.clear()
+        self.calls = []
+
+        def fake(url, timeout=25):
+            self.calls.append(url)
+            if url == benchmark.CATALOGUE_URL:
+                return self.CAT
+            if url == benchmark.STATUS_URL:
+                return self.STATUS
+            if url.startswith(benchmark.AUDIT_URL):
+                return self.AUDIT
+            raise AssertionError(url)
+        self.orig = benchmark.get
+        benchmark.get = fake
+
+    def tearDown(self):
+        self.B.get = self.orig
+        self.B._cache.clear()
+
+    def test_P39_catalogue_categories_and_detail(self):
+        c = self.B.catalogue()
+        self.assertEqual(c["count"], 4)
+        self.assertEqual(c["portal"]["registry_version"], "911f9f0e6ec844db")
+        self.assertEqual(c["portal"]["status_checked_at"], "2026-09-22T01:25:22Z")
+        row = next(r for r in c["services"] if r["service_id"] == "kr-export-pulse-v1")
+        self.assertEqual(row["category_competing_services"], 3)  # government has 3
+        self.assertEqual(row["price_usd"], 0.005)
+        self.assertTrue(row["has_output_schema"])
+        self.assertFalse(row["has_input_schema"])
+        self.assertIsNotNone(row["portal_example_age_days"])
+        self.assertEqual(self.B.catalogue(category="government")["count"], 3)
+        self.assertEqual(self.B.catalogue(serving=False)["count"], 1)
+
+        cats = self.B.categories()
+        gov = next(x for x in cats["categories"] if x["category"] == "government")
+        self.assertEqual((gov["services"], gov["serving"], gov["first_party_services"]), (3, 2, 2))
+        self.assertEqual((gov["price_usd_min"], gov["price_usd_max"]), (0.002, 0.005))
+
+        d = self.B.service("kr-export-pulse-v1")
+        self.assertEqual(d["status"], "OK")
+        self.assertEqual(d["audit"]["verdict"], "PASS")
+        self.assertEqual(self.B.service("nope-v1")["status"], "NOT_IN_PORTAL_CATALOGUE")
+
+    def test_P40_compare_ordering_routing_and_degradation(self):
+        r = self.B.compare({"category": "government"})
+        self.assertEqual(r["status"], "OK")
+        self.assertEqual([c["portal_record"]["service_id"] for c in r["candidates"]],
+                         ["kr-export-pulse-v1", "entity-registration", "federal-register"])
+        self.assertEqual([c["rank"] for c in r["candidates"]], [1, 2, 3])
+        self.assertIn("audit verdict PASS before WARN", r["ordering_rule"])
+        self.assertTrue(r["not_measured"])
+
+        P = self.B.parse_question
+        self.assertEqual(P("I need Korean export statistics")["category"], "government")
+        self.assertEqual(P("scholarly literature please")["category"], "research")
+        self.assertEqual(P("검사 보안 lint")["category"], "security")
+        self.assertIsNone(P("hello there")["category"])
+
+        q = self.B.compare({"question": "I need export and customs data", "audit": False})
+        self.assertEqual(q["query"]["category"], "government")
+        self.assertEqual(q["audit_status"], "SKIPPED")
+        # without audit, ordering falls back to serving, then price, then example freshness
+        self.assertEqual([c["portal_record"]["service_id"] for c in q["candidates"]],
+                         ["kr-export-pulse-v1", "entity-registration", "federal-register"])
+        self.assertLess(q["candidates"][0]["portal_record"]["portal_example_age_days"],
+                        q["candidates"][1]["portal_record"]["portal_example_age_days"])
+
+        self.assertEqual(self.B.compare({})["status"], "NEEDS_CLARIFICATION")
+        ids = self.B.compare({"ids": ["kr-export-pulse-v1", "ghost-v1"]})
+        self.assertEqual(ids["not_in_catalogue"], ["ghost-v1"])
+        self.assertEqual(ids["count"], 1)
+
+        def boom(url, timeout=25):
+            if url.startswith(self.B.AUDIT_URL):
+                raise OSError("audit down")
+            return self.CAT if url == self.B.CATALOGUE_URL else self.STATUS
+        self.B.get = boom
+        self.B._cache.clear()
+        deg = self.B.compare({"category": "government"})
+        self.assertEqual(deg["status"], "OK")          # degrades, does not fail
+        self.assertIn("audit", deg["audit_status"])
+        self.assertIsNone(deg["candidates"][0]["audit"])
+
+        card = self.B.service_card()
+        self.assertLess(len(json.dumps(card, ensure_ascii=False).encode()), 4096)
+        self.assertEqual(len(card["serving"]["healthcheck"]), 4)

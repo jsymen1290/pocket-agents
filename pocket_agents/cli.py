@@ -16,6 +16,7 @@
   pinelint-serve [--port 8796]                 Pine Script Lint HTTP service (POST /v1/lint)
   krexport-serve [--port 8797]                 KR Export Pulse (Korea Customs 10-day / HS; needs DATA_GO_KR_SERVICE_KEY)
   dart-serve [--port 8798]                     DART KR Events (OpenDART corrections/terms/as-of; needs OPENDART_API_KEY)
+  bench-serve [--port 8799]                    Agent Service Benchmark (portal catalogue + acceptance audit comparison)
   agent-card [--out path]                      write the pocket-service-card/v1 JSON for the agent + add-service command
   ask --operator pokt1... --q "질문" [--from H --to H | --hours N] [--no-llm]   one local answer (same code path as the service)
 """
@@ -81,6 +82,8 @@ def main(argv):
     kec = sub.add_parser("krexport-card"); kec.add_argument("--out"); kec.add_argument("--base", default="https://export.pokt-agent.com")
     de = sub.add_parser("dart-serve"); de.add_argument("--host", default="0.0.0.0"); de.add_argument("--port", type=int, default=8798)
     dec = sub.add_parser("dart-card"); dec.add_argument("--out"); dec.add_argument("--base", default="https://dart.pokt-agent.com")
+    bs = sub.add_parser("bench-serve"); bs.add_argument("--host", default="0.0.0.0"); bs.add_argument("--port", type=int, default=8799)
+    bc = sub.add_parser("bench-card"); bc.add_argument("--out"); bc.add_argument("--base", default="https://bench.pokt-agent.com")
     ag = sub.add_parser("agent-serve")
     ag.add_argument("--host", default="0.0.0.0")
     ag.add_argument("--port", type=int, default=8793)
@@ -236,6 +239,21 @@ def main(argv):
             fh.write("\n")
         print("wrote %s (%d bytes)" % (out, os.path.getsize(out)))
         print(prepare.add_service_commands(mod.SERVICE_ID, "KR Export Pulse" if args.cmd == "krexport-card" else "DART KR Events", "5000", out))
+        return 0
+    if args.cmd == "bench-serve":
+        from .benchmark import serve as bench_serve, SERVICE_ID as BENCH_ID
+        print("%s on http://%s:%d/" % (BENCH_ID, args.host, args.port), file=sys.stderr)
+        bench_serve(args.host, args.port)
+        return 0
+    if args.cmd == "bench-card":
+        from .benchmark import SERVICE_ID as BENCH_ID, service_card as bench_card
+        out = args.out or os.path.join(root, "prepared", "%s.card.json" % BENCH_ID)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(bench_card(args.base), fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        print("wrote %s (%d bytes)" % (out, os.path.getsize(out)))
+        print(prepare.add_service_commands(BENCH_ID, "Agent Service Benchmark", "5000", out))
         return 0
     if args.cmd == "agent-card":
         from .agent import SERVICE_ID, service_card
