@@ -396,6 +396,8 @@ def serve(data_dir, host="0.0.0.0", port=8798):
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer((host, port), _Handler) as httpd:
         httpd.daemon_threads = True
+        from . import warmup  # replay the card probes before the cache expires (OpenDART list cache is 600 s)
+        warmup.start(port, warmup.probes_from_card(service_card()), 540, SERVICE_ID)
         httpd.serve_forever()
 
 

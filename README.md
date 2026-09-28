@@ -50,7 +50,15 @@ curl -s 'https://kr.pokt-agent.com/v1/executable/BTC?qty=0.5&side=buy&fee_pct=0.
 
 `coverage` is the fraction of the quantity the visible book can fill, `slippage_pct` is against best price, and `orderbook_lag_seconds` is how stale the book was when we read it. A venue that is down returns a status code, never a guess.
 
-Median response time measured from the host on 2026-09-22: 248-333 ms across the six services.
+The same walk answers a plain question in English or Korean:
+
+```bash
+curl -s -X POST https://kr.pokt-agent.com/v1/query -H 'content-type: application/json'   -d '{"question":"sell 2 BTC on Upbit and Bithumb, what fills?"}'
+```
+
+On 2026-09-28 that returned `coverage` 0.77 on Upbit and 0.50 on Bithumb: the visible books could not fill 2 BTC at any price.
+
+Median response time measured from the host on 2026-09-22: 248-333 ms across the six services. Services that call an upstream API (`dart-kr-events-v1`, `kr-export-pulse-v1`) replay their own card probes against themselves just inside the cache TTL (`warmup.py`), so the first call after a restart is 0.04 s instead of 3.8 s.
 
 ## Layout
 

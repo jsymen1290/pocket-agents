@@ -550,8 +550,8 @@ class KrMarketTests(unittest.TestCase):
 
     def test_P27_parse_and_answer_bilingual(self):
         P = self.m.parse_question
-        self.assertEqual(P("비트코인 김치 프리미엄 얼마야?"), {"intent": "PREMIUM", "symbol": "BTC"})
-        self.assertEqual(P("What is the XRP price on Upbit?"), {"intent": "PRICE", "symbol": "XRP"})
+        self.assertEqual({k: P("비트코인 김치 프리미엄 얼마야?")[k] for k in ("intent", "symbol")}, {"intent": "PREMIUM", "symbol": "BTC"})
+        self.assertEqual({k: P("What is the XRP price on Upbit?")[k] for k in ("intent", "symbol")}, {"intent": "PRICE", "symbol": "XRP"})
         self.assertEqual(P("show me the ETH orderbook")["intent"], "ORDERBOOK"); self.assertEqual(P("원/달러 환율")["intent"], "FX")
         self.assertEqual(P("which markets are listed")["intent"], "MARKETS"); self.assertEqual(P("hello")["intent"], "UNKNOWN")
         a = self.m.answer({"question": "김프 알려줘"}); self.assertEqual(a["status"], "NEEDS_CLARIFICATION")
@@ -975,3 +975,59 @@ class BenchmarkTests(unittest.TestCase):
         card = self.B.service_card()
         self.assertLess(len(json.dumps(card, ensure_ascii=False).encode()), 4096)
         self.assertEqual(len(card["serving"]["healthcheck"]), 4)
+
+
+class WarmupAndQueryTests(unittest.TestCase):
+    """Card probes are replayed against the local port; kr-market /v1/query reaches the orderbook walk."""
+
+    def test_warmup_replays_card_probes(self):
+        import http.server
+        import socketserver
+        import threading
+        from pocket_agents import warmup, dartevents, krexport
+        seen = []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def _ok(self):
+                n = int(self.headers.get("content-length") or 0)
+                seen.append((self.command, self.path, self.rfile.read(n) if n else b""))
+                self.send_response(200); self.send_header("content-length", "2"); self.end_headers(); self.wfile.write(b"{}")
+            do_GET = do_POST = _ok
+
+            def log_message(self, *a):
+                pass
+
+        srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            dp = warmup.probes_from_card(dartevents.service_card())
+            self.assertIn(("GET", "/v1/changes?corp_code=00126380", None), dp)
+            res = warmup.run_once(srv.server_address[1], dp)
+            self.assertEqual([r[2] for r in res], [200] * len(dp))
+            self.assertIn(("GET", "/v1/pulse?months=3", None), warmup.probes_from_card(krexport.service_card()))
+            self.assertTrue(str(warmup.run_once(1, [("GET", "/", None)], timeout=2)[0][2]).startswith("ERR"))
+        finally:
+            srv.shutdown(); srv.server_close()
+
+    def test_kr_market_query_executable(self):
+        from pocket_agents import krmarket as K
+        P = K.parse_question
+        for q, intent, sym, qty, side in [
+            ("How much would 0.5 BTC cost on Upbit right now?", "EXECUTABLE", "BTC", "0.5", "buy"),
+            ("sell 3 ETH with 0.05% fee", "EXECUTABLE", "ETH", "3", "sell"),
+            ("비트코인 2개 팔면 얼마 받아?", "EXECUTABLE", "BTC", "2", "sell"),
+            ("BTC 김치 프리미엄 얼마야?", "PREMIUM", "BTC", None, "buy"),
+            ("bitcoin price", "PRICE", "BTC", None, "buy"),
+            ("hello there", "UNKNOWN", None, None, "buy"),
+        ]:
+            p = P(q)
+            self.assertEqual((p["intent"], p["symbol"], p["qty"], p["side"]), (intent, sym, qty, side), q)
+        calls = []
+        orig = K.executable
+        K.executable = lambda sym, qty, side="buy", fee_pct=0.0, depth=30: calls.append((sym, qty, side, fee_pct)) or {"ok": 1}
+        try:
+            self.assertEqual(K.answer({"question": "sell 3 ETH with 0.05% fee"})["intent"], "EXECUTABLE")
+            self.assertEqual(calls[-1], ("ETH", "3", "sell", "0.05"))
+            self.assertEqual(K.answer({"question": "what would it cost to buy BTC"})["status"], "NEEDS_CLARIFICATION")
+        finally:
+            K.executable = orig

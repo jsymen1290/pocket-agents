@@ -424,6 +424,8 @@ def serve(data_dir, host="0.0.0.0", port=8797):
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer((host, port), _Handler) as httpd:
         httpd.daemon_threads = True
+        from . import warmup  # replay the card probes before the cache expires (Customs cache is 3600 s)
+        warmup.start(port, warmup.probes_from_card(service_card()), 3300, SERVICE_ID)
         httpd.serve_forever()
 
 

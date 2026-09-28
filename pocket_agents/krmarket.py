@@ -275,7 +275,9 @@ def markets():
             "bithumb_listing_status": d["bithumb_list"], "markets": d["rows"], "sources": [UPBIT + "/market/all?isDetails=false", BITHUMB + "/market/all?isDetails=false"]}
 
 
-INTENTS = ("PRICE", "PREMIUM", "ORDERBOOK", "MARKETS", "FX", "UNKNOWN")
+EN_NAMES = {"bitcoin": "BTC", "ethereum": "ETH", "ether": "ETH", "ripple": "XRP", "solana": "SOL", "dogecoin": "DOGE",
+            "cardano": "ADA", "pocket network": "POKT", "pokt": "POKT"}
+INTENTS = ("PRICE", "EXECUTABLE", "PREMIUM", "ORDERBOOK", "MARKETS", "FX", "UNKNOWN")
 
 
 def parse_question(q):
@@ -288,12 +290,29 @@ def parse_question(q):
             sym = s
             break
     if not sym:
+        low = q.lower()
+        for en, s_ in EN_NAMES.items():
+            if re.search(r"\b%s\b" % en, low):
+                sym = s_
+                break
+    if not sym:
         m = re.search(r"\b([A-Z]{2,10})\b(?:/KRW|-KRW|USDT)?", q)
         if m and m.group(1) not in ("KRW", "USD", "USDKRW", "FX", "OK", "THE", "AND", "FOR", "ON"):
             sym = m.group(1)
+    # Quantity and side for the executable (orderbook-walk) path. "0.5 BTC", "BTC 0.5개", "비트코인 0.5개".
+    # A number followed by % is a fee, not a quantity.
+    qty = None
+    for m in re.finditer(r"(?<![\d.])(\d+(?:\.\d+)?)(?![\d.])(?!\s*%)", q):
+        qty = m.group(1)
+        break
+    fee = re.search(r"(\d+(?:\.\d+)?)\s*%\s*(?:fee|수수료)|(?:fee|수수료)\s*(\d+(?:\.\d+)?)\s*%", q, re.I)
+    fee_pct = (fee.group(1) or fee.group(2)) if fee else None
+    side = "sell" if re.search(r"\bsell|매도|팔면|팔 때|팔때|팔아", q, re.I) else "buy"
     intent = "UNKNOWN"
     if re.search(r"premium|프리미엄|김치|김프", q, re.I):
         intent = "PREMIUM"
+    elif re.search(r"executable|slippage|fill|\bcost|\bbuy|\bsell|체결|슬리피지|매수|매도|사면|팔면|살 때|살때|팔 때|팔때", q, re.I) or             (qty and re.search(r"price|얼마|how much|가격", q, re.I)):
+        intent = "EXECUTABLE"
     elif re.search(r"orderbook|order book|호가|depth|bid|ask", q, re.I):
         intent = "ORDERBOOK"
     elif re.search(r"markets?\b|listed|상장|목록|list", q, re.I):
@@ -302,7 +321,7 @@ def parse_question(q):
         intent = "FX"
     elif re.search(r"price|시세|가격|얼마|quote|ticker", q, re.I):
         intent = "PRICE"
-    return {"intent": intent, "symbol": sym}
+    return {"intent": intent, "symbol": sym, "qty": qty, "side": side, "fee_pct": fee_pct}
 
 
 def answer(body):
@@ -313,7 +332,7 @@ def answer(body):
     intent = p["intent"]
     res = {"schema": "kr-market-answer/v1", "service": SERVICE_ID, "intent": intent, "question": q[:300], "symbol": sym, "status": "OK"}
     if intent == "UNKNOWN":
-        res.update(status="NEEDS_CLARIFICATION", missing=["intent: price | premium | orderbook | markets | fx"], intents=list(INTENTS))
+        res.update(status="NEEDS_CLARIFICATION", missing=["intent: price | executable (qty) | premium | orderbook | markets | fx"], intents=list(INTENTS))
         return res
     if intent == "MARKETS":
         res.update(data=markets())
@@ -330,6 +349,14 @@ def answer(body):
         res.update(data=premium(sym))
     elif intent == "ORDERBOOK":
         res.update(data=orderbook(sym, body.get("depth") or 5))
+    elif intent == "EXECUTABLE":
+        qty = body.get("qty") or p["qty"]
+        if not qty:
+            res.update(status="NEEDS_CLARIFICATION", missing=["qty (base units, e.g. 0.5)"])
+            return res
+        side = body.get("side") or p["side"]
+        fee = body.get("fee_pct") if body.get("fee_pct") is not None else (p["fee_pct"] or 0.0)
+        res.update(qty=str(qty), side=side, data=executable(sym, qty, side, fee))
     return res
 
 
