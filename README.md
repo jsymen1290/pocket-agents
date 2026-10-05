@@ -14,6 +14,12 @@ Seven verification-style services for the [Pocket Network](https://pocket.networ
 
 All six pass the portal audit 9/9 on Beta TestNet (2026-09-20) with settled claims served through the new `pocket-relay-miner`.
 
+## Use from agents and CI
+
+- **MCP:** every service as Model Context Protocol tools. Remote: `https://mcp.pokt-agent.com/mcp` (no sign-in). Local stdio server: [`mcp/`](mcp/).
+- **GitHub Action:** check the Pine files in a repository on every push — [`actions/pine-check/`](actions/pine-check/): `uses: jsymen1290/pocket-agents/actions/pine-check@main`.
+- Also live since 2026-10-05 (REST + Pocket Beta): [Backtest Reconcile](https://backtest.pokt-agent.com/), [KR Figure Check](https://figures.pokt-agent.com/), [DART Correction Impact](https://impact.pokt-agent.com/), [KR Rates & FX](https://rates.pokt-agent.com/), [KR Law](https://law.pokt-agent.com/), [KR Apartment Trades](https://apt.pokt-agent.com/).
+
 ## Two calls, shown
 
 Both of these are live right now, no key and no account.
