@@ -114,6 +114,8 @@ def handle(msg, fwd=None):
         return None
     if method == "ping":
         return ok({})
+    if method in ("resources/list", "resources/templates/list", "prompts/list"):  # clients probe these; we serve tools only
+        return ok({"resources/list": {"resources": []}, "resources/templates/list": {"resourceTemplates": []}, "prompts/list": {"prompts": []}}[method])
     if method == "tools/list":
         return ok({"tools": [{"name": t["name"], "description": t["description"], "inputSchema": t["inputSchema"],
                               "annotations": {"readOnlyHint": True, "openWorldHint": True}} for t in TOOLS]})
