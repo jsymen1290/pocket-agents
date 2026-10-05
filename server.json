@@ -2,9 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.jsymen1290/pokt-agent",
   "title": "POKT Agent tools",
-  "description": "Pine Script backtest-trap checks, backtest reconciliation and official Korean finance data (BoK rates, KRW FX, DART, statutes).",
-  "repository": {"url": "https://github.com/jsymen1290/pocket-agents", "source": "github", "subfolder": "mcp"},
+  "description": "Pine Script backtest-trap checks, backtest reconciliation and official Korean finance data.",
+  "repository": {
+    "url": "https://github.com/jsymen1290/pocket-agents",
+    "source": "github",
+    "subfolder": "mcp"
+  },
   "websiteUrl": "https://mcp.pokt-agent.com/",
   "version": "0.1.0",
-  "remotes": [{"type": "streamable-http", "url": "https://mcp.pokt-agent.com/mcp"}]
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.pokt-agent.com/mcp"
+    }
+  ]
 }
