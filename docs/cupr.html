@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pocket CUPR calculator</title>
+<meta name="description" content="What one relay burns and who is paid, for any compute-units-per-relay value on Pocket Network.">
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#14171c;--mute:#5b6472;--line:#dfe3ea;--acc:#1d5fd1;--accbg:#e9f0fd}
+@media (prefers-color-scheme:dark){:root{--bg:#101318;--card:#181c23;--ink:#eceff4;--mute:#9aa4b2;--line:#2b313b;--acc:#7fb0ff;--accbg:#1c2738}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:720px;margin:0 auto;padding:28px 16px 48px}
+h1{font-size:1.6rem;line-height:1.25;margin:0 0 6px;text-wrap:balance}
+h2{font-size:1.05rem;margin:0 0 10px}
+p{margin:0 0 12px}.mute{color:var(--mute);font-size:.9rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:16px}
+label{display:block;font-size:.9rem;color:var(--mute);margin:12px 0 4px}
+input[type=number]{width:100%;padding:10px 12px;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;font-variant-numeric:tabular-nums}
+input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+button{font:inherit;font-size:.88rem;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}
+.checks{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}.checks label{display:flex;gap:8px;align-items:center;margin:0;color:inherit;font-size:.95rem}
+.big{font-size:1.9rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.kpi{background:var(--accbg);border-radius:10px;padding:12px 14px}.kpi small{display:block;color:var(--mute);font-size:.82rem}
+.kpi b{font-size:1.25rem;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+th{font-size:.82rem;color:var(--mute);font-weight:600}
+tr.you td{font-weight:700}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 14px}
+code,pre{font-family:ui-monospace,Consolas,monospace;font-size:.86rem}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;margin:8px 0 0}
+summary{cursor:pointer;font-weight:600}
+a{color:var(--acc)}
+</style>
+</head>
+<body>
+<main>
+<h1>Pocket CUPR calculator</h1>
+<p class="mute">What one relay burns, and who is paid, for any compute-units-per-relay value. Runs in your browser; nothing is sent anywhere.</p>
+
+<section class="card">
+  <h2>Your service</h2>
+  <label for="cupr">Compute units per relay (CUPR)</label>
+  <input id="cupr" type="number" min="1" step="1" value="50000" inputmode="numeric">
+  <div class="presets" aria-label="Presets">
+    <button data-v="1579">eth · 1,579</button>
+    <button data-v="50000">50,000</button>
+    <button data-v="100000">100,000</button>
+    <button data-v="500000">500,000</button>
+    <button data-v="4000000">4,000,000</button>
+  </div>
+  <label for="relays">Relays per day</label>
+  <input id="relays" type="number" min="0" step="1" value="1000" inputmode="numeric">
+  <div class="checks">
+    <label><input type="checkbox" id="isSup" checked> I run the supplier</label>
+    <label><input type="checkbox" id="isOwn"> I own the service</label>
+  </div>
+</section>
+
+<section class="card" aria-live="polite">
+  <h2>One relay</h2>
+  <div class="big"><span id="burn">–</span> POKT</div>
+  <p class="mute">burned from the application's stake (<span id="burnU">–</span> upokt)</p>
+  <div class="kpis">
+    <div class="kpi"><small>Your share per relay</small><b id="youRelay">–</b></div>
+    <div class="kpi"><small>Your share per day</small><b id="youDay">–</b></div>
+    <div class="kpi"><small>Your share per 30 days</small><b id="youMonth">–</b></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Where it goes</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Step</th><th>Per relay</th><th>Per day</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  </div>
+  <p class="mute" style="margin-top:10px">All figures in POKT. "Per day" uses the relay count above.</p>
+</section>
+
+<section class="card">
+  <details>
+    <summary>Network parameters (editable)</summary>
+    <p class="mute" style="margin-top:8px">Defaults were read from MainNet on 13 November 2026. They are governance parameters and can change, so check them before a decision:</p>
+    <pre>pocketd query shared params --network main
+pocketd query tokenomics params --network main
+pocketd query service show-service &lt;service-id&gt; --network main</pre>
+    <div class="grid2">
+      <div><label for="mult">compute_units_to_tokens_multiplier</label><input id="mult" type="number" value="153156"></div>
+      <div><label for="gran">compute_unit_cost_granularity</label><input id="gran" type="number" value="1000000"></div>
+      <div><label for="mint">mint_ratio</label><input id="mint" type="number" step="0.001" value="0.975"></div>
+      <div><label for="sSup">supplier share</label><input id="sSup" type="number" step="0.001" value="0.79"></div>
+      <div><label for="sPro">proposer share</label><input id="sPro" type="number" step="0.001" value="0.14"></div>
+      <div><label for="sDao">dao share</label><input id="sDao" type="number" step="0.001" value="0.045"></div>
+      <div><label for="sOwn">source_owner share</label><input id="sOwn" type="number" step="0.001" value="0.025"></div>
+    </div>
+  </details>
+</section>
+
+<section class="card">
+  <h2>What this does not include</h2>
+  <p>It is settlement arithmetic only. It leaves out gas for claims and proofs, your hosting and upstream costs, and the one-millionth <code>global_inflation_per_claim</code>. On busy services the relay count in a claim is an estimate from sampled relays, so real sessions vary slightly. It says nothing about token price.</p>
+  <p class="mute">A CUPR change applies from the next session, not to relays already served. Coordinate a change with the portal team if your service is listed there, because the portal's USD price has to cover what each call burns.</p>
+  <p class="mute">By jsymen · <a href="https://github.com/jsymen1290/pocket-agents/blob/main/ambassador/explainer-relay-to-payout.md">how settlement works</a> · <a href="https://github.com/jsymen1290/pocket-agents/blob/main/docs/cupr.html">source</a></p>
+</section>
+</main>
+<script>
+// shortcut: parameters are fixed defaults, not fetched live (no CORS-enabled public endpoint found); fetch them here if one appears.
+const $ = id => document.getElementById(id), num = id => Number($(id).value) || 0;
+const fmt = x => x === 0 ? "0" : x >= 100 ? x.toLocaleString("en-US", {maximumFractionDigits: 2})
+  : x >= 1 ? x.toFixed(4) : x.toPrecision(4).replace(/\.?0+$/, "");
+
+function settle(cupr, mult, gran, mint, shares) {
+  const burn = cupr * mult / gran / 1e6;          // POKT per relay
+  const minted = burn * mint;
+  return {burn, minted, removed: burn - minted,
+          parts: Object.fromEntries(Object.entries(shares).map(([k, v]) => [k, minted * v]))};
+}
+// self-check against a value computed by hand from chain parameters
+console.assert(Math.abs(settle(50000, 153156, 1e6, 0.975, {s: 0.79}).burn - 0.0076578) < 1e-12, "burn formula");
+console.assert(Math.abs(settle(50000, 153156, 1e6, 0.975, {s: 0.79}).parts.s - 0.00589842045) < 1e-10, "supplier share");
+
+function render() {
+  const relays = num("relays");
+  const r = settle(num("cupr"), num("mult"), num("gran"), num("mint"),
+    {sup: num("sSup"), pro: num("sPro"), dao: num("sDao"), own: num("sOwn")});
+  const you = ($("isSup").checked ? r.parts.sup : 0) + ($("isOwn").checked ? r.parts.own : 0);
+  $("burn").textContent = fmt(r.burn);
+  $("burnU").textContent = Math.round(r.burn * 1e6).toLocaleString("en-US");
+  $("youRelay").textContent = fmt(you) + " POKT";
+  $("youDay").textContent = fmt(you * relays) + " POKT";
+  $("youMonth").textContent = fmt(you * relays * 30) + " POKT";
+  const rows = [
+    ["Burned from the application", r.burn],
+    ["Minted back", r.minted],
+    ["→ Supplier", r.parts.sup, $("isSup").checked],
+    ["→ Block proposer / validators", r.parts.pro],
+    ["→ DAO", r.parts.dao],
+    ["→ Service owner", r.parts.own, $("isOwn").checked],
+    ["Removed from supply", r.removed],
+  ];
+  $("rows").innerHTML = rows.map(([n, v, mine]) =>
+    `<tr${mine ? ' class="you"' : ""}><td>${n}${mine ? " (you)" : ""}</td><td>${fmt(v)}</td><td>${fmt(v * relays)}</td></tr>`).join("");
+}
+document.querySelectorAll("input").forEach(i => i.addEventListener("input", render));
+document.querySelectorAll("button[data-v]").forEach(b => b.addEventListener("click", () => { $("cupr").value = b.dataset.v; render(); }));
+render();
+</script>
+</body>
+</html>
