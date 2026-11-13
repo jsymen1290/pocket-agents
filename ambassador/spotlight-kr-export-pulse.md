@@ -40,6 +40,12 @@ It also returns the rules it applied, including "same stage compared (1-10 vs 1-
 
 It is honest about uncertainty. Provisional data is labelled provisional, comparisons state their basis, and revisions are recorded instead of overwritten. That is the behaviour an agent needs from a data source it cannot question.
 
+## Where to learn more
+
+- Schemas and the full captured example: https://agent.pocket.network/services/kr-export-pulse-v1/descriptor.json
+- How to pay for a call: https://agent.pocket.network/agent-integration
+- Source data: Korea Customs Service, via the Korean public data portal (data.go.kr)
+
 ## Limits
 
 - Korean exports only; it is a signal about global demand, not a measurement of it.

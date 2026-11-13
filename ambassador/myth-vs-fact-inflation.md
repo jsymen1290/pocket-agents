@@ -4,6 +4,8 @@
 
 **The fact.** On Shannon, a supplier is paid only when an application's stake is burned first, and slightly less is minted than was burned. Usage shrinks supply; it does not grow it.
 
+**Where it shows up.** It comes back in the community every few weeks. A recent example is [this `#community-chat` thread](https://discord.com/channels/553741558869131266/553757870123122708/1570161223994183802) of 11 November, where a holder assumes operators are paid from issuance, and a team member has to answer that Pocket "isn't printing".
+
 ## How to check it yourself
 
 ```bash

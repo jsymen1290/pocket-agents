@@ -21,7 +21,20 @@
 | If the operator disappears | The API is gone | Another supplier can stake and serve the same service ID |
 | Discovery by an agent | Read docs written for humans | `llms.txt`, `services.json` with schemas, MCP tools |
 | Secrets to protect | An API key per provider | One wallet key, with a spend cap |
+| Round trips per call | One | Two: the `402` with the price, then the paid retry |
+| Path of a request | Client to provider | Client to portal to gateway to a supplier's RelayMiner to its backend |
 | SLA and support | Often contractual | Best-effort, no SLA |
+
+## Performance, stated carefully
+
+I have no benchmark to offer and will not invent one. What can be said from the design:
+
+- **Pocket adds hops.** A portal call passes through the portal, a gateway and the supplier's RelayMiner before it reaches the backend, and an unpaid first request costs one extra round trip. For a data lookup that an agent makes once per task this is rarely the bottleneck; for a latency-critical loop it can be.
+- **Latency varies by supplier.** Different suppliers run different hardware in different places. Gateways route on observed quality, but nothing guarantees a figure.
+- **Availability comes from redundancy, not from a promise.** A traditional provider gives an uptime number in a contract. Pocket gives the possibility of several independent suppliers per service and a public status page. For a service with a single supplier, that redundancy does not exist yet.
+- **Settlement speed is not request speed.** The response is immediate; the supplier's payment settles on chain about half an hour later. The caller never waits for that.
+
+Measure your own endpoint before deciding. `status.json` and a handful of timed calls tell you more than any comparison article.
 
 ## Where Pocket is the better fit
 
@@ -51,3 +64,4 @@ Use Pocket for discovery-driven, low-volume, many-source calls made by agents. K
 - Integration guide: https://agent.pocket.network/agent-integration
 - Service fee and stake parameters: `pocketd query service params --network main`, `pocketd query supplier params --network main`
 - Claims and proofs: https://docs.pocket.network/protocol/sessions-claims-proofs/
+- Portal status: https://agent.pocket.network/status
