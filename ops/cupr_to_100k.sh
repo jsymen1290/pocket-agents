@@ -6,6 +6,7 @@ P=/opt/homebrew/bin/pocketd
 D=/Volumes/A/POKT/agent-deploy
 OWNER=pokt139kcncr45rukhlzyncgua8ln2jpfjysyzu5t2c
 NEW=100000
+bal() { $P query bank balances $OWNER --network=main -o json | python3 -c 'import sys,json;print(next(int(b["amount"]) for b in json.load(sys.stdin)["balances"] if b["denom"]=="upokt"))'; }
 for pair in pine:pine-script-lint-v1:"Pine Script Lint" kr:kr-market-data-v1:"KR Market Data" apt:kr-apt-trades-v1:"KR Apartment Trades" dart:dart-kr-events-v1:"DART KR Events" impact:dart-correction-impact-v1:"DART Correction Impact" export:kr-export-pulse-v1:"KR Export Pulse" rates:kr-rates-fx-v1:"KR Rates and FX" law:kr-law-v1:"KR Law" figures:kr-figure-check-v1:"KR Figure Check" backtest:backtest-reconcile-v1:"Backtest Reconcile"; do
   f=${pair%%:*}; rest=${pair#*:}; s=${rest%%:*}; n=${rest#*:}
   cur=$($P query service show-service $s --network=main -o json | python3 -c '
@@ -18,8 +19,12 @@ print(s["compute_units_per_relay"],s["owner_address"],"CARD_OK" if ok else "CARD
   case "$cur" in "$NEW "*) echo "  -> 이미 $NEW"; continue;; esac
   CMD=($P tx service add-service $s "$n" $NEW --card-file $D/$f.card.json --from pokt-owner-ops --network=main --gas 400000 --fees 400000upokt --keyring-backend file --yes)
   if [ "$RUN" = 1 ]; then
+    B0=$(bal)
     "${CMD[@]}" || { echo "  -> 전송 실패, 중단"; exit 1; }
     sleep 40
+    B1=$(bal)
+    # 갱신은 가스만 든다(약 0.4 POKT). 5 POKT 넘게 줄었으면 등록 수수료가 붙은 것이니 즉시 멈춘다.
+    [ $((B0-B1)) -le 5000000 ] || { echo "  -> 잔액 감소 $((B0-B1))upokt 과다, 중단"; exit 1; }
     $P query service show-service $s --network=main -o json | python3 -c 'import sys,json;s=json.load(sys.stdin);s=s.get("service",s);print("  -> 갱신 후 CUPR",s["compute_units_per_relay"])'
   else
     echo "  (점검만) ${CMD[*]}"
